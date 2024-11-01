@@ -5,10 +5,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-/// @title A crowdfunding campaign contract
-/// @author anstormx
-/// @notice This contract manages a single crowdfunding campaign
-/// @dev This contract handles contributions, spending requests, and fund management
 contract Campaign is ReentrancyGuard, Ownable {
     using Counters for Counters.Counter;
 
@@ -20,16 +16,17 @@ contract Campaign is ReentrancyGuard, Ownable {
         uint approvalCount;
         uint rejectionCount;
         uint votingDeadline;
-        mapping(address => bool) approvals;
+        mapping(address => bool) vote;
     }
 
-    address public immutable factory;
+    address payable public immutable factory;
     uint public immutable minimumContribution;
     mapping(address => uint) public contributions;
     Counters.Counter private _contributorsCount;
     mapping(uint => Request) public requests;
     Counters.Counter private _requestsCount;
     uint public totalFunds;
+    uint public maxFunds;
     bool public isCancelled;
 
     event ContributionMade(address contributor, uint amount);
@@ -40,7 +37,9 @@ contract Campaign is ReentrancyGuard, Ownable {
         address recipient
     );
     event RequestApproved(uint requestId, address approver);
+    event RequestRejected(uint requestId, address rejector);
     event RequestFinalized(uint requestId);
+    event RequestCancelled(uint requestId);
     event RefundIssued(address contributor, uint amount);
     event CampaignCancelled();
 
@@ -49,10 +48,22 @@ contract Campaign is ReentrancyGuard, Ownable {
         _;
     }
 
+    modifier onlyFactory() {
+        require(msg.sender == factory, "Only the factory can call this function");
+        _;
+    }
+
     constructor(uint minContribution, address _factory) {
         _transferOwnership(msg.sender);
-        factory = _factory;
+        factory = payable(_factory);
         minimumContribution = minContribution;
+    }
+
+    function _updateTotalFunds() internal {
+        totalFunds = address(this).balance;
+        if (totalFunds > maxFunds) {
+            maxFunds = totalFunds;
+        }
     }
 
     function contribute() public payable campaignActive nonReentrant {
@@ -64,73 +75,103 @@ contract Campaign is ReentrancyGuard, Ownable {
             _contributorsCount.increment();
         }
         contributions[msg.sender] += msg.value;
-        totalFunds += msg.value;
+        _updateTotalFunds();
         emit ContributionMade(msg.sender, msg.value);
     }
 
-    /// @notice Creates a new spending request
-    /// @dev Only the manager can create requests
-    /// @param description A description of the spending request
-    /// @param value The amount of wei to be spent
-    /// @param recipient The address to receive the funds
     function createRequest(
         string memory description,
         uint value,
         address payable recipient
-    ) public onlyOwner {
+    ) public onlyOwner campaignActive nonReentrant {
+        require(value > 0, "Request value must be greater than 0");
+        require(bytes(description).length > 0, "Description cannot be empty");
+        require(recipient != address(0), "Invalid recipient address");
         require(
             value <= address(this).balance,
             "Insufficient funds for request"
         );
+
         uint newRequestId = _requestsCount.current();
         Request storage newRequest = requests[newRequestId];
+
         newRequest.description = description;
         newRequest.value = value;
         newRequest.recipient = recipient;
         newRequest.complete = false;
-        newRequest.votingDeadline = block.timestamp + 7 days; // Set a voting deadline
+        newRequest.votingDeadline = block.timestamp + 7 days;
+
         _requestsCount.increment();
         emit RequestCreated(newRequestId, description, value, recipient);
     }
 
-    /// @notice Allows a contributor to approve a spending request
-    /// @param index The index of the request in the requests array
-    function approveRequest(uint index) public {
+    function approveRequest(uint index) public campaignActive nonReentrant {
+        require(index < _requestsCount.current(), "Invalid request index");
         require(contributions[msg.sender] > 0, "Only contributors can approve");
         Request storage request = requests[index];
-        require(!request.approvals[msg.sender], "You have already voted");
+        require(!request.vote[msg.sender], "You have already voted");
         require(
             block.timestamp <= request.votingDeadline,
             "Voting period has ended"
         );
-        request.approvals[msg.sender] = true;
+        request.vote[msg.sender] = true;
         request.approvalCount++;
         emit RequestApproved(index, msg.sender);
     }
 
-    /// @notice Finalizes a request and sends the funds if approved
-    /// @dev Only the manager can finalize requests
-    /// @param index The index of the request in the requests array
-    function finalizeRequest(uint index) public onlyOwner nonReentrant {
+    function rejectRequest(uint index) public campaignActive nonReentrant {
+        require(index < _requestsCount.current(), "Invalid request index");
+        require(contributions[msg.sender] > 0, "Only contributors can reject");
         Request storage request = requests[index];
-        require(!request.complete, "Request has already been completed");
+        require(!request.vote[msg.sender], "You have already voted");
         require(
-            request.approvalCount > (_contributorsCount.current() / 2),
+            block.timestamp <= request.votingDeadline,
+            "Voting period has ended"
+        );
+
+        request.vote[msg.sender] = true;
+        request.rejectionCount++;
+        emit RequestRejected(index, msg.sender);
+    }
+
+    function finalizeRequest(uint index) public onlyOwner nonReentrant {
+        require(index < _requestsCount.current(), "Invalid request index");
+        Request storage request = requests[index];
+        require(
+            block.timestamp > request.votingDeadline,
+            "Voting period not ended"
+        );
+        require(!request.complete, "Request has already been completed");
+
+        uint totalVotes = request.approvalCount + request.rejectionCount;
+        uint quorum = (_contributorsCount.current() * 30) / 100; // 30% quorum
+
+        require(totalVotes >= quorum, "Quorum not reached");
+        require(
+            request.approvalCount > request.rejectionCount,
             "Not enough approvals"
         );
+
         require(request.value <= address(this).balance, "Insufficient funds");
+
         request.complete = true;
         request.recipient.transfer(request.value);
-        totalFunds -= request.value;
+        _updateTotalFunds();
         emit RequestFinalized(index);
     }
 
-    /// @notice Retrieves a summary of the campaign
-    /// @return minimumContribution The minimum contribution amount
-    /// @return balance The current balance of the campaign
-    /// @return requestsCount The number of spending requests
-    /// @return contributorsCount The number of contributors
-    /// @return manager The address of the campaign manager
+    function cancelRequest(uint index) public onlyOwner nonReentrant {
+        require(index < _requestsCount.current(), "Invalid request index");
+        Request storage request = requests[index];
+        require(!request.complete, "Request has already been completed");
+        require(
+            block.timestamp <= request.votingDeadline,
+            "Voting period ended"
+        );
+        request.complete = true;
+        emit RequestCancelled(index);
+    }
+
     function getSummary()
         public
         view
@@ -145,49 +186,21 @@ contract Campaign is ReentrancyGuard, Ownable {
         );
     }
 
-    /// @notice Retrieves the number of spending requests
-    /// @return The total number of spending requests
     function getRequestsCount() public view returns (uint) {
         return _requestsCount.current();
     }
 
-    /// @notice Allows contributors to get a refund if the voting fails
-    /// @dev Implements a 5% fee for refunds, or allows keeping funds in the contract
-    /// @param requestIndex The index of the failed request
-    function getRefund(uint requestIndex) public campaignActive nonReentrant {
-        Request storage request = requests[requestIndex];
-        require(contributions[msg.sender] > 0, "Not a contributor");
-        require(
-            block.timestamp > request.votingDeadline,
-            "Voting still in progress"
-        );
-        require(
-            request.rejectionCount > request.approvalCount,
-            "Request was not rejected"
-        );
-
-        uint refundAmount = contributions[msg.sender];
-        uint fee = (refundAmount * 5) / 100; // 5% fee
-        uint refundAmountAfterFee = refundAmount - fee;
-
-        contributions[msg.sender] = 0;
-        totalFunds -= refundAmount;
-        payable(msg.sender).transfer(refundAmountAfterFee);
-
-        emit RefundIssued(msg.sender, refundAmountAfterFee);
+    function cancelCampaign() public campaignActive onlyOwner nonReentrant {
+        factory.transfer(address(this).balance);
+        isCancelled = true;
+        _updateTotalFunds();
+        emit CampaignCancelled();
     }
 
-    /// @notice Allows the manager to cancel the campaign and refund all contributors
-    /// @dev Only callable by the manager and if there are no active requests
-    function cancelCampaign() public onlyOwner {
-        require(!isCancelled, "Campaign is already cancelled");
-        require(
-            _requestsCount.current() == 0 ||
-                requests[_requestsCount.current() - 1].complete,
-            "There are active requests"
-        );
-
+    function forceCancel() public campaignActive onlyFactory nonReentrant {
+        factory.transfer(address(this).balance);
         isCancelled = true;
+        _updateTotalFunds();
         emit CampaignCancelled();
     }
 
@@ -199,10 +212,8 @@ contract Campaign is ReentrancyGuard, Ownable {
         return totalFunds;
     }
 
-    function forceCancel() public {
-        require(msg.sender == factory, "Only the factory can force cancel");
-        isCancelled = true;
-        emit CampaignCancelled();
+    function getMaxFunds() public view returns (uint) {
+        return maxFunds;
     }
 
     receive() external payable {
