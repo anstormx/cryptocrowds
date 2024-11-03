@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { useAccount } from "wagmi";
 import { useIsMounted } from "@/hooks/useIsMounted";
-import { ethers } from "ethers";
+import { ethers, TransactionReceipt } from "ethers";
 import CampaignFactory from "../../../../artifacts/contracts/CampaignFactory.sol/CampaignFactory.json";
+import { useNotification } from "@/utils/toastNotification";
 
 interface CampaignNewState {
 	title: string;
@@ -21,7 +21,7 @@ interface CampaignNewState {
 
 const CampaignNew = () => {
 	const router = useRouter();
-	const { toast } = useToast();
+	const notify = useNotification();
 	const [state, setState] = useState<CampaignNewState>({
 		title: "",
 		minContribution: "",
@@ -38,7 +38,7 @@ const CampaignNew = () => {
 				try {
 					const accounts = await window.ethereum.request({
 						method: "eth_accounts",
-					});
+					}) as string[];
 
 					if (accounts && accounts.length > 0) {
 						const provider = new ethers.BrowserProvider(
@@ -63,42 +63,30 @@ const CampaignNew = () => {
 		}
 	}, [isMounted, address]);
 
-	const notification = (
-		title: string,
-		description: string,
-		variant: "default" | "destructive"
-	) => {
-		toast({
-			title,
-			description,
-			variant,
-		});
-	};
-
 	const onSubmit = async (event: FormEvent) => {
 		event.preventDefault();
 
 		// Check if the user is connected
 		if (!isConnected) {
-			notification("Error", "Please connect your wallet", "destructive");
+			notify("Error", "Please connect your wallet", "destructive");
 			return;
 		}
 
 		// Check if the contract is initialized
 		if (!factoryContract) {
-			notification("Error", "Contract not initialized", "destructive");
+			notify("Error", "Contract not initialized", "destructive");
 			return;
 		}
 
 		// Check if the title is empty
 		if (!state.title) {
-			notification("Error", "Please enter a title", "destructive");
+			notify("Error", "Please enter a title", "destructive");
 			return;
 		}
 
 		// Check if the minimum contribution is empty
 		if (!state.minContribution) {
-			notification(
+			notify(
 				"Error",
 				"Please enter a minimum contribution",
 				"destructive"
@@ -108,7 +96,7 @@ const CampaignNew = () => {
 
 		// Check if the minimum contribution is a number
 		if (isNaN(Number(state.minContribution))) {
-			notification("Error", "Please enter a valid number", "destructive");
+			notify("Error", "Please enter a valid number", "destructive");
 			return;
 		}
 
@@ -119,18 +107,35 @@ const CampaignNew = () => {
 			const txn = await factoryContract.createCampaign(
 				state.minContribution
 			);
-			await txn.wait();
+			const receipt = await txn.wait() as TransactionReceipt;
 
-			console.log("Transaction: ", txn);
-			notification(
+			console.log("Receipt: ", receipt);
+
+			// Extract the campaign address from the event logs
+			const event = receipt.logs
+				.map((log) => {
+					try {
+						return factoryContract.interface.parseLog({
+							topics: log.topics,
+							data: log.data,
+						});
+					} catch {
+						return null;
+					}
+				})
+				.find((event) => event && event.name === "CampaignCreated");
+
+			const campaignAddress = event ? event.args.campaignAddress : null;
+
+			notify(
 				"Success",
-				"Campaign created successfully!",
+				`Campaign created successfully!\nContract Address: ${campaignAddress}`,
 				"default"
 			);
             
 			router.push("/");
 		} catch (err) {
-			notification("Error", "An unknown error occurred", "destructive");
+			notify("Error", "An unknown error occurred", "destructive");
 		}
 
 		setState((prev) => ({ ...prev, loading: false }));

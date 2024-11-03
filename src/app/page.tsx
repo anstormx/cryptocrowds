@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
+// import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import CampaignFactory from "../../artifacts/contracts/CampaignFactory.sol/CampaignFactory.json";
+import useProvider from "@/utils/getProvider";
 
 interface Campaign {
 	address: string;
@@ -17,6 +18,7 @@ export default function Home() {
 	const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+    const { getProvider } = useProvider();
 
 	useEffect(() => {
 		fetchCampaigns();
@@ -24,13 +26,13 @@ export default function Home() {
 
 	const fetchCampaigns = async () => {
 		try {
-			if (!window.ethereum) {
-				throw new Error(
-					"Please install MetaMask to use this application"
-				);
-			}
+			// if (!window.ethereum) {
+			// 	throw new Error(
+			// 		"Please install MetaMask to use this application"
+			// 	);
+			// }
 
-			const provider = new ethers.BrowserProvider(window.ethereum);
+			const provider = (await getProvider()).provider;
 
 			const factory = new ethers.Contract(
 				process.env.NEXT_PUBLIC_FACTORY_ADDRESS!,
