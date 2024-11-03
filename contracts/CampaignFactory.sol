@@ -13,6 +13,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
         address campaignAddress;
         bool isActive;
         uint256 createdAt;
+        string title;
         uint256 minContribution;
         address creator;
     }
@@ -22,29 +23,33 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
     mapping(address => uint) public campaignIds;
 
     event CampaignCreated(
-        uint indexed campaignId,
-        address indexed campaignAddress,
-        address indexed creator,
+        uint campaignId,
+        address campaignAddress,
+        address creator,
+        string title,
         uint256 minContribution,
         uint256 timestamp
     );
     event CampaignRemoved(
-        uint indexed campaignId,
-        address indexed campaignAddress
+        uint campaignId,
+        address campaignAddress
     );
     event CampaignStatusChanged(
-        uint indexed campaignId,
-        address indexed campaignAddress,
+        uint campaignId,
+        address campaignAddress,
         bool isActive
     );
+    event FundsReleased(uint amount, address recipient);
 
     constructor() {
         _transferOwnership(msg.sender);
     }
 
     function createCampaign(
+        string memory title,
         uint minContribution
     ) public nonReentrant returns (address) {
+        require(bytes(title).length > 0, "Title cannot be empty");
         require(
             minContribution > 0,
             "Minimum contribution must be greater than 0"
@@ -52,7 +57,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
 
         uint256 newCampaignId = _campaignIdCounter.current();
         address newCampaign = address(
-            new Campaign(minContribution, address(this))
+            new Campaign(title, minContribution, address(this))
         );
 
         require(newCampaign != address(0), "Campaign creation failed");
@@ -61,6 +66,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
             campaignAddress: newCampaign,
             isActive: true,
             createdAt: block.timestamp,
+            title: title,
             minContribution: minContribution,
             creator: msg.sender
         });
@@ -72,6 +78,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
             newCampaignId,
             newCampaign,
             msg.sender,
+            title,
             minContribution,
             block.timestamp
         );
@@ -177,6 +184,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
             address campaignAddress,
             bool isActive,
             uint256 createdAt,
+            string memory title,
             uint256 minContribution,
             address creator
         )
@@ -191,8 +199,22 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
             info.campaignAddress,
             info.isActive,
             info.createdAt,
+            info.title,
             info.minContribution,
             info.creator
         );
+    }
+
+    function getCampaignId(address campaignAddress) public view returns (uint) {
+        return campaignIds[campaignAddress];
+    }
+
+    function releaseFunds() public onlyOwner nonReentrant {
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No funds to release");
+
+        payable(owner()).transfer(balance);
+
+        emit FundsReleased(balance, owner());
     }
 }

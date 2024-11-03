@@ -20,6 +20,8 @@ contract Campaign is ReentrancyGuard, Ownable {
     }
 
     address payable public immutable factory;
+    uint public immutable createdAt = block.timestamp;
+    string public title;
     uint public immutable minimumContribution;
     mapping(address => uint) public contributions;
     Counters.Counter private _contributorsCount;
@@ -53,9 +55,10 @@ contract Campaign is ReentrancyGuard, Ownable {
         _;
     }
 
-    constructor(uint minContribution, address _factory) {
+    constructor(string memory _title, uint minContribution, address _factory) {
         _transferOwnership(msg.sender);
         factory = payable(_factory);
+        title = _title; 
         minimumContribution = minContribution;
     }
 
@@ -175,9 +178,10 @@ contract Campaign is ReentrancyGuard, Ownable {
     function getSummary()
         public
         view
-        returns (uint, uint, uint, uint, address)
+        returns (string memory, uint, uint, uint, uint, address)
     {
         return (
+            title,
             minimumContribution,
             address(this).balance,
             _requestsCount.current(),
