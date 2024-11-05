@@ -1,6 +1,5 @@
 "use client";
 
-// import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
@@ -18,22 +17,11 @@ export default function Home() {
 	const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-    const { getProvider } = useProvider();
+	const { getProvider } = useProvider();
 
-	useEffect(() => {
-		fetchCampaigns();
-	}, []);
-
-	const fetchCampaigns = async () => {
+	async function fetchCampaigns() {
 		try {
-			// if (!window.ethereum) {
-			// 	throw new Error(
-			// 		"Please install MetaMask to use this application"
-			// 	);
-			// }
-
 			const provider = (await getProvider()).provider;
-
 			const factory = new ethers.Contract(
 				process.env.NEXT_PUBLIC_FACTORY_ADDRESS!,
 				CampaignFactory.abi,
@@ -57,7 +45,12 @@ export default function Home() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}
+
+	useEffect(() => {
+		fetchCampaigns();
+		console.log("fetchCampaigns");
+	}, []);
 
 	const renderCampaigns = () => {
 		if (loading) {
@@ -92,7 +85,7 @@ export default function Home() {
 					<Card key={campaign.address}>
 						<div className="p-6">
 							<h3 className="font-semibold mb-2 truncate">
-								Campaign at: {campaign.address}
+								Campaign: {campaign.address}
 							</h3>
 							<p className="text-sm text-gray-600 mb-4">
 								Status:{" "}
@@ -116,7 +109,7 @@ export default function Home() {
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 				<div className="text-center mb-12">
 					<h1 className="text-4xl font-bold text-gray-900 mb-4">
-						Welcome to FundHash!
+						Welcome to CryptoCrowds!
 					</h1>
 					<p className="text-xl text-gray-600 mb-8">
 						Bring a creative project to life through decentralized

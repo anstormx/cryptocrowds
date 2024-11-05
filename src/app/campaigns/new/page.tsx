@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { useAccount } from "wagmi";
-import { useIsMounted } from "@/hooks/useIsMounted";
 import { ethers, TransactionReceipt } from "ethers";
 import CampaignFactory from "../../../../artifacts/contracts/CampaignFactory.sol/CampaignFactory.json";
 import { useNotification } from "@/utils/toastNotification";
+import useProvider from "@/utils/getProvider";
 
 interface CampaignNewState {
 	title: string;
@@ -27,41 +27,10 @@ const CampaignNew = () => {
 		minContribution: "",
 		loading: false,
 	});
-	const [factoryContract, setFactoryContract] =
-		useState<ethers.Contract | null>(null);
-	const { address, isConnected } = useAccount();
-	const isMounted = useIsMounted();
+	const { isConnected } = useAccount();
+    const { getProvider } = useProvider();
 
-	useEffect(() => {
-		const initContract = async () => {
-			if (typeof window !== "undefined" && window.ethereum) {
-				try {
-					const accounts = await window.ethereum.request({
-						method: "eth_accounts",
-					}) as string[];
-
-					if (accounts && accounts.length > 0) {
-						const provider = new ethers.BrowserProvider(
-							window.ethereum
-						);
-						const signer = await provider.getSigner();
-						const contract = new ethers.Contract(
-							process.env.NEXT_PUBLIC_FACTORY_ADDRESS ?? "",
-							CampaignFactory.abi,
-							signer
-						);
-						setFactoryContract(contract);
-					}
-				} catch (error) {
-					console.error("Failed to initialize contract:", error);
-				}
-			}
-		};
-
-		if (isMounted) {
-			initContract();
-		}
-	}, [isMounted, address]);
+	// const isMounted = useIsMounted();
 
 	const onSubmit = async (event: FormEvent) => {
 		event.preventDefault();
@@ -69,12 +38,6 @@ const CampaignNew = () => {
 		// Check if the user is connected
 		if (!isConnected) {
 			notify("Error", "Please connect your wallet", "destructive");
-			return;
-		}
-
-		// Check if the contract is initialized
-		if (!factoryContract) {
-			notify("Error", "Contract not initialized", "destructive");
 			return;
 		}
 
@@ -103,8 +66,14 @@ const CampaignNew = () => {
 		setState((prev) => ({ ...prev, loading: true }));
 
 		try {
-			// Create a new campaign
+            const signer = (await getProvider()).signer;
+            const factoryContract = new ethers.Contract(
+                process.env.NEXT_PUBLIC_FACTORY_ADDRESS as string,
+                CampaignFactory.abi,
+                signer
+            );
 			const txn = await factoryContract.createCampaign(
+                state.title,
 				state.minContribution
 			);
 			const receipt = await txn.wait() as TransactionReceipt;
@@ -135,15 +104,19 @@ const CampaignNew = () => {
             
 			router.push("/");
 		} catch (err) {
-			notify("Error", "An unknown error occurred", "destructive");
+            console.error("Error creating campaign:", err);
+            let errorMessage = "An unknown error occurred";
+            if(err instanceof Error) {
+                if(err.message.includes("user rejected")) {
+					errorMessage = "Transaction was rejected by user";
+				}
+            }
+
+			notify("Error", errorMessage, "destructive");
 		}
 
 		setState((prev) => ({ ...prev, loading: false }));
 	};
-
-	if (!isMounted) {
-		return null;
-	}
 
 	return (
 		<div className="mx-auto px-4 py-6 max-w-2xl">

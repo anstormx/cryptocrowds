@@ -15,7 +15,6 @@ contract Campaign is ReentrancyGuard, Ownable {
         bool complete;
         uint approvalCount;
         uint rejectionCount;
-        uint votingDeadline;
         mapping(address => bool) vote;
     }
 
@@ -55,8 +54,8 @@ contract Campaign is ReentrancyGuard, Ownable {
         _;
     }
 
-    constructor(string memory _title, uint minContribution, address _factory) {
-        _transferOwnership(msg.sender);
+    constructor(string memory _title, uint minContribution, address _factory, address _owner) {
+        _transferOwnership(_owner);
         factory = payable(_factory);
         title = _title; 
         minimumContribution = minContribution;
@@ -102,7 +101,6 @@ contract Campaign is ReentrancyGuard, Ownable {
         newRequest.value = value;
         newRequest.recipient = recipient;
         newRequest.complete = false;
-        newRequest.votingDeadline = block.timestamp + 7 days;
 
         _requestsCount.increment();
         emit RequestCreated(newRequestId, description, value, recipient);
@@ -113,10 +111,8 @@ contract Campaign is ReentrancyGuard, Ownable {
         require(contributions[msg.sender] > 0, "Only contributors can approve");
         Request storage request = requests[index];
         require(!request.vote[msg.sender], "You have already voted");
-        require(
-            block.timestamp <= request.votingDeadline,
-            "Voting period has ended"
-        );
+        require(!request.complete, "Request has already been completed");
+
         request.vote[msg.sender] = true;
         request.approvalCount++;
         emit RequestApproved(index, msg.sender);
@@ -127,10 +123,7 @@ contract Campaign is ReentrancyGuard, Ownable {
         require(contributions[msg.sender] > 0, "Only contributors can reject");
         Request storage request = requests[index];
         require(!request.vote[msg.sender], "You have already voted");
-        require(
-            block.timestamp <= request.votingDeadline,
-            "Voting period has ended"
-        );
+        require(!request.complete, "Request has already been completed");
 
         request.vote[msg.sender] = true;
         request.rejectionCount++;
@@ -140,10 +133,6 @@ contract Campaign is ReentrancyGuard, Ownable {
     function finalizeRequest(uint index) public onlyOwner nonReentrant {
         require(index < _requestsCount.current(), "Invalid request index");
         Request storage request = requests[index];
-        require(
-            block.timestamp > request.votingDeadline,
-            "Voting period not ended"
-        );
         require(!request.complete, "Request has already been completed");
 
         uint totalVotes = request.approvalCount + request.rejectionCount;
@@ -167,10 +156,7 @@ contract Campaign is ReentrancyGuard, Ownable {
         require(index < _requestsCount.current(), "Invalid request index");
         Request storage request = requests[index];
         require(!request.complete, "Request has already been completed");
-        require(
-            block.timestamp <= request.votingDeadline,
-            "Voting period ended"
-        );
+        
         request.complete = true;
         emit RequestCancelled(index);
     }

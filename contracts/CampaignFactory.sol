@@ -57,7 +57,7 @@ contract CampaignFactory is Ownable, ReentrancyGuard {
 
         uint256 newCampaignId = _campaignIdCounter.current();
         address newCampaign = address(
-            new Campaign(title, minContribution, address(this))
+            new Campaign(title, minContribution, address(this), msg.sender)
         );
 
         require(newCampaign != address(0), "Campaign creation failed");

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import Campaign from "@/../artifacts/contracts/Campaign.sol/Campaign.json";
 import useProvider from "@/utils/getProvider";
 import { useNotification } from "@/utils/toastNotification";
+import { useAccount } from "wagmi";
 
 interface ContributeFormProps {
 	minContribution: string;
@@ -26,6 +27,7 @@ export default function ContributeForm({
 	const [loading, setLoading] = useState(false);
 	const { getProvider } = useProvider();
 	const notify = useNotification();
+    const { isConnected } = useAccount();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -41,6 +43,11 @@ export default function ContributeForm({
 				);
 				return;
 			}
+
+            if (!isConnected) {
+                notify("Error", "Please connect your wallet", "destructive");
+                return;
+            }
 
 			if (!campaignAddress) {
 				notify("Error", "Campaign address not found", "destructive");
