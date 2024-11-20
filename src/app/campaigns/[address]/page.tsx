@@ -64,11 +64,11 @@ export default function CampaignDetails() {
 	useEffect(() => {
 		if (campaignAddress) {
 			fetchCampaignDetails();
-            // console.log("fetchCampaignDetails");
+			// console.log("fetchCampaignDetails");
 		}
 	}, [campaignAddress]);
 
-    const handleContributionSuccess = () => {
+	const handleContributionSuccess = () => {
 		fetchCampaignDetails();
 	};
 
@@ -104,71 +104,73 @@ export default function CampaignDetails() {
 
 	if (loading) {
 		return (
-			<div className="flex justify-center items-center min-h-screen">
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+			<div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-green-100 relative overflow-hidden">
+				<div className="flex justify-center items-center min-h-screen">
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+				</div>
 			</div>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="flex justify-center items-center min-h-screen">
-				<div className="text-red-600">{error}</div>
+			<div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-green-100 relative overflow-hidden">
+				<div className="flex justify-center items-center min-h-screen">
+					<div className="text-red-600">{error}</div>
+				</div>
 			</div>
 		);
 	}
 
-	return (
-		<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold mb-2">{summary.title}</h1>
-				<p className="text-gray-600">Campaign Details</p>
-			</div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-green-100 relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold mb-2">{summary.title}</h1>
+          <p className="text-sm text-gray-600">Campaign Details</p>
+        </div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				<div className="lg:col-span-2">
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						{items.map((item, index) => (
-							<Card key={index}>
-								<CardHeader>
-									<CardTitle className="text-lg">
-										{item.title}
-									</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<p className="text-2xl font-semibold mb-2 break-all">
-										{item.value}
-									</p>
-									<p className="text-sm text-gray-600">
-										{item.description}
-									</p>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				</div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {items.map((item, index) => (
+                <Card key={index} className="overflow-hidden">
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-sm font-medium">{item.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0">
+                    <p className="text-base font-semibold mb-1 break-all">{item.value}</p>
+                    <p className="text-xs text-gray-500">{item.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
 
-				<div className="lg:col-span-1">
-					<Card>
-						<CardHeader>
-							<CardTitle>Contribute to Campaign</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<ContributeForm
-								minContribution={summary.minContribution}
-								campaignAddress={campaignAddress}
-                                onContributionSuccess={handleContributionSuccess}
-							/>
-						</CardContent>
-					</Card>
-				</div>
-			</div>
+          <div className="sm:col-span-1">
+            <Card>
+              <CardHeader>
+								<CardTitle>Contribute to Campaign</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ContributeForm
+                  minContribution={summary.minContribution}
+                  campaignAddress={campaignAddress}
+									onContributionSuccess={
+										handleContributionSuccess
+									}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
-			<div className="mt-8">
-				<Link href={`/campaigns/${campaignAddress}/requests`}>
-					<Button>View Requests</Button>
-				</Link>
-			</div>
-		</div>
-	);
+        <div className="mt-8">
+          <Link href={`/campaigns/${campaignAddress}/requests`}>
+            <Button>View Requests</Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }

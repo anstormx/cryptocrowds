@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ethers } from "ethers";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import CampaignFactory from "../../artifacts/contracts/CampaignFactory.sol/CampaignFactory.json";
 import useProvider from "@/utils/getProvider";
@@ -80,32 +80,35 @@ export default function Home() {
 		}
 
 		return (
-			<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-				{campaigns.map((campaign) => (
-					<Card key={campaign.address}>
-						<div className="p-6">
-							<h3 className="font-semibold mb-2 truncate">
-								Campaign: {campaign.address}
-							</h3>
-							<p className="text-sm text-gray-600 mb-4">
-								Status:{" "}
-								{campaign.isActive ? "Active" : "Inactive"}
-							</p>
-							<Link
-								href={`/campaigns/${campaign.address}`}
-								className="inline-block"
-							>
-								<Button variant="outline">View Campaign</Button>
-							</Link>
-						</div>
-					</Card>
-				))}
-			</div>
-		);
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {campaigns.map((campaign) => (
+                <Card key={campaign.address} className="overflow-hidden">
+                  <CardContent className="p-6">
+                    <h3 className="font-semibold mb-2 truncate">
+                      Campaign: {campaign.address.slice(0, 6)}...{campaign.address.slice(-4)}
+                    </h3>
+                    <p className={`text-sm ${campaign.isActive ? 'text-green-600' : 'text-red-600'} mb-4`}>
+                      Status: {campaign.isActive ? "Active" : "Inactive"}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="bg-gray-50 border-t p-4">
+                    <Link
+                      href={`/campaigns/${campaign.address}`}
+                      className="w-full"
+                    >
+                      <Button variant="outline" className="w-full">
+                        View Campaign
+                      </Button>
+                    </Link>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          );
 	};
 
 	return (
-		<div className="min-h-screen">
+        <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-100 to-green-100 relative overflow-hidden">
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 				<div className="text-center mb-12">
 					<h1 className="text-4xl font-bold text-gray-900 mb-4">
