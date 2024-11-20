@@ -5,8 +5,9 @@ import { ethers } from "ethers";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useNotification } from "@/utils/toastNotification";
-import useProvider from "@/utils/getProvider";
+// import useProvider from "@/utils/getProvider";
 import Campaign from "@/../artifacts/contracts/Campaign.sol/Campaign.json";
+import { useAccount } from "wagmi";
 
 interface RequestRowProps {
 	id: number;
@@ -22,6 +23,8 @@ interface RequestRowProps {
 	contributorsCount: string;
 	isOwner: boolean;
 	contribution: string;
+	userVoted: boolean;
+    onTransactionComplete: () => Promise<void>;
 }
 
 export default function RequestRow({
@@ -31,27 +34,45 @@ export default function RequestRow({
 	contributorsCount,
 	isOwner,
 	contribution,
+    userVoted,
+    onTransactionComplete,
 }: RequestRowProps) {
 	const [isApproving, setIsApproving] = useState(false);
 	const [isRejecting, setIsRejecting] = useState(false);
 	const [isFinalizing, setIsFinalizing] = useState(false);
 	const [isCancelling, setIsCancelling] = useState(false);
 	const notify = useNotification();
-	const { getProvider } = useProvider();
+    const { isConnected } = useAccount();
+	// const { getProvider } = useProvider();
 
 	const isContributor = Number(contribution) > 0;
-	const hasVoted = false; // You'll need to add this to your request struct and track it
+	const hasVoted = userVoted;
 	const isReadyToFinalize =
 		Number(request.approvalCount) > Number(contributorsCount) / 2;
 
 	const onApprove = async () => {
 		try {
 			setIsApproving(true);
-			const signer = (await getProvider()).signer;
+			if (!window.ethereum) {
+				notify(
+					"Error",
+					"Please install MetaMask to use this application",
+					"destructive"
+				);
+				return;
+			}
+			const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
 			const campaign = new ethers.Contract(address, Campaign.abi, signer);
 			const tx = await campaign.approveRequest(id - 1);
 			await tx.wait();
-			notify("Success", "Request approved successfully!", "default");
+			notify(
+				"Success",
+				`Request approved successfully!\nTxnHash: ${tx.hash}`,
+				"default"
+			);
+
+            await onTransactionComplete();
 		} catch (error) {
 			console.error(error);
 			let errorMessage = "An unknown error occurred";
@@ -75,11 +96,23 @@ export default function RequestRow({
 	const onReject = async () => {
 		try {
 			setIsRejecting(true);
-			const signer = (await getProvider()).signer;
+			if (!window.ethereum) {
+				notify(
+					"Error",
+					"Please install MetaMask to use this application",
+					"destructive"
+				);
+				return;
+			}
+			const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
 			const campaign = new ethers.Contract(address, Campaign.abi, signer);
 			const tx = await campaign.rejectRequest(id - 1);
 			await tx.wait();
 			notify("Success", "Request rejected successfully!", "default");
+
+            await onTransactionComplete();
+
 		} catch (error) {
 			console.error(error);
 			let errorMessage = "An unknown error occurred";
@@ -103,11 +136,23 @@ export default function RequestRow({
 	const onFinalize = async () => {
 		try {
 			setIsFinalizing(true);
-			const signer = (await getProvider()).signer;
+			if (!window.ethereum) {
+				notify(
+					"Error",
+					"Please install MetaMask to use this application",
+					"destructive"
+				);
+				return;
+			}
+			const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
 			const campaign = new ethers.Contract(address, Campaign.abi, signer);
 			const tx = await campaign.finalizeRequest(id - 1);
 			await tx.wait();
 			notify("Success", "Request finalized successfully!", "default");
+
+            await onTransactionComplete();
+
 		} catch (error) {
 			console.error(error);
 			let errorMessage = "An unknown error occurred";
@@ -133,11 +178,23 @@ export default function RequestRow({
 	const onCancel = async () => {
 		try {
 			setIsCancelling(true);
-			const signer = (await getProvider()).signer;
+			if (!window.ethereum) {
+				notify(
+					"Error",
+					"Please install MetaMask to use this application",
+					"destructive"
+				);
+				return;
+			}
+			const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
 			const campaign = new ethers.Contract(address, Campaign.abi, signer);
 			const tx = await campaign.cancelRequest(id - 1);
 			await tx.wait();
 			notify("Success", "Request cancelled successfully!", "default");
+
+            await onTransactionComplete();
+
 		} catch (error) {
 			console.error(error);
 			let errorMessage = "An unknown error occurred";
@@ -156,69 +213,107 @@ export default function RequestRow({
 		}
 	};
 
-	const renderActionButtons = () => {
-		if (request.complete) {
-			return <span className="text-green-600">Completed</span>;
-		}
+    const renderActionButtons = () => {
+        // If request is complete, show completed status
+        if (request.complete) {
+            return <span className="text-green-600">Completed</span>;
+        }
 
-		if (isOwner) {
-			return (
-				<div className="space-x-2">
-					<Button
-						onClick={onCancel}
-						disabled={isCancelling}
-						variant="outline"
-						size="sm"
-					>
-						{isCancelling ? "Cancelling..." : "Cancel"}
-					</Button>
-					{isReadyToFinalize && (
-						<Button
-							onClick={onFinalize}
-							disabled={isFinalizing}
-							variant="default"
-							size="sm"
-						>
-							{isFinalizing ? "Finalizing..." : "Finalize"}
-						</Button>
-					)}
-				</div>
-			);
-		}
+        if (!isConnected) {
+            return (
+                <div className="text-sm text-gray-500">
+                    Please connect wallet to interact
+                </div>
+            );
+        }
 
-		if (isContributor && !hasVoted) {
-			return (
-				<div className="space-x-2">
-					<Button
-						onClick={onApprove}
-						disabled={isApproving}
-						variant="outline"
-						size="sm"
-					>
-						{isApproving ? "Approving..." : "Approve"}
-					</Button>
-					<Button
-						onClick={onReject}
-						disabled={isRejecting}
-						variant="outline"
-						size="sm"
-					>
-						{isRejecting ? "Rejecting..." : "Reject"}
-					</Button>
-				</div>
-			);
-		}
+        // Owner's view of buttons
+        if (isOwner) {
+            return (
+                <div className="flex items-center space-x-2">
+                    {isContributor && !request.complete && (
+                        <>
+                            <Button
+                                onClick={onApprove}
+                                disabled={isApproving || hasVoted || request.complete}
+                                variant="outline"
+                                size="sm"
+                            >
+                                {isApproving ? "Approving..." : "Approve"}
+                            </Button>
+                            <Button
+                                onClick={onReject}
+                                disabled={isRejecting || hasVoted || request.complete}
+                                variant="outline"
+                                size="sm"
+                            >
+                                {isRejecting ? "Rejecting..." : "Reject"}
+                            </Button>
+                        </>
+                    )}
+                    <Button
+                        onClick={onCancel}
+                        disabled={isCancelling || request.complete}
+                        variant="outline"
+                        size="sm"
+                    >
+                        {isCancelling ? "Cancelling..." : "Cancel"}
+                    </Button>
+                    {isReadyToFinalize && !request.complete && (
+                        <Button
+                            onClick={onFinalize}
+                            disabled={isFinalizing}
+                            variant="default"
+                            size="sm"
+                        >
+                            {isFinalizing ? "Finalizing..." : "Finalize"}
+                        </Button>
+                    )}
+                </div>
+            );
+        }
 
-		if (isContributor && hasVoted) {
-			return <span className="text-gray-600">Already voted</span>;
-		}
+        // Contributor's view of buttons
+        if (isContributor) {
+            // Not yet voted
+            if (!hasVoted && !request.complete) {
+                return (
+                    <div className="space-x-2">
+                        <Button
+                            onClick={onApprove}
+                            disabled={isApproving}
+                            variant="outline"
+                            size="sm"
+                        >
+                            {isApproving ? "Approving..." : "Approve"}
+                        </Button>
+                        <Button
+                            onClick={onReject}
+                            disabled={isRejecting}
+                            variant="outline"
+                            size="sm"
+                        >
+                            {isRejecting ? "Rejecting..." : "Reject"}
+                        </Button>
+                    </div>
+                );
+            }
 
-		return (
-			<div className="text-sm text-gray-500">
-				Contribute to vote on this request
-			</div>
-		);
-	};
+            // Already voted or request is complete
+            return (
+                <span className="text-gray-600">
+                    {hasVoted ? "Already voted" : "Completed"}
+                </span>
+            );
+        }
+
+        // Non-contributor view
+        return (
+            <div className="text-sm text-gray-500">
+                Contribute to vote on this request
+            </div>
+        );
+    };
 
 	return (
 		<TableRow>

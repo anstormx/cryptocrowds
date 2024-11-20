@@ -50,14 +50,22 @@ contract Campaign is ReentrancyGuard, Ownable {
     }
 
     modifier onlyFactory() {
-        require(msg.sender == factory, "Only the factory can call this function");
+        require(
+            msg.sender == factory,
+            "Only the factory can call this function"
+        );
         _;
     }
 
-    constructor(string memory _title, uint minContribution, address _factory, address _owner) {
+    constructor(
+        string memory _title,
+        uint minContribution,
+        address _factory,
+        address _owner
+    ) {
         _transferOwnership(_owner);
         factory = payable(_factory);
-        title = _title; 
+        title = _title;
         minimumContribution = minContribution;
     }
 
@@ -130,6 +138,17 @@ contract Campaign is ReentrancyGuard, Ownable {
         emit RequestRejected(index, msg.sender);
     }
 
+    function hasVoted(
+        uint requestIndex,
+        address contributor
+    ) public view returns (bool) {
+        require(
+            requestIndex < _requestsCount.current(),
+            "Invalid request index"
+        );
+        return requests[requestIndex].vote[contributor];
+    }
+
     function finalizeRequest(uint index) public onlyOwner nonReentrant {
         require(index < _requestsCount.current(), "Invalid request index");
         Request storage request = requests[index];
@@ -156,7 +175,7 @@ contract Campaign is ReentrancyGuard, Ownable {
         require(index < _requestsCount.current(), "Invalid request index");
         Request storage request = requests[index];
         require(!request.complete, "Request has already been completed");
-        
+
         request.complete = true;
         emit RequestCancelled(index);
     }

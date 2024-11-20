@@ -64,9 +64,13 @@ export default function CampaignDetails() {
 	useEffect(() => {
 		if (campaignAddress) {
 			fetchCampaignDetails();
-            console.log("fetchCampaignDetails");
+            // console.log("fetchCampaignDetails");
 		}
 	}, [campaignAddress]);
+
+    const handleContributionSuccess = () => {
+		fetchCampaignDetails();
+	};
 
 	const items = [
 		{
@@ -77,7 +81,7 @@ export default function CampaignDetails() {
 		},
 		{
 			title: "Minimum Contribution",
-			value: `${ethers.parseEther(summary.minContribution)} wei`,
+			value: `${summary.minContribution} MATIC`,
 			description:
 				"You must contribute at least this much to become an voter",
 		},
@@ -93,7 +97,7 @@ export default function CampaignDetails() {
 		},
 		{
 			title: "Campaign Balance",
-			value: `${summary.balance} ETH`,
+			value: `${summary.balance} MATIC`,
 			description: "The amount of ETH this campaign has left to spend",
 		},
 	];
@@ -153,6 +157,7 @@ export default function CampaignDetails() {
 							<ContributeForm
 								minContribution={summary.minContribution}
 								campaignAddress={campaignAddress}
+                                onContributionSuccess={handleContributionSuccess}
 							/>
 						</CardContent>
 					</Card>

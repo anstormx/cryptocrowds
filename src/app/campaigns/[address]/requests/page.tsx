@@ -10,7 +10,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import RequestRow from "@/components/requestRow";
 import useProvider from "@/utils/getProvider";
 import Campaign from "@/../artifacts/contracts/Campaign.sol/Campaign.json";
@@ -23,6 +23,7 @@ interface Request {
 	complete: boolean;
 	approvalCount: string;
 	rejectionCount: string;
+    userVoted?: boolean; // New field to track user's voting status
 }
 
 interface RequestsData {
@@ -50,74 +51,81 @@ export default function RequestsPage({ params }: RequestsPageProps) {
 	const [isOwner, setIsOwner] = useState(false);
 	const { isConnected, address: userAddress } = useAccount();
 
-	useEffect(() => {
-		async function fetchRequestsData() {
-			try {
-				const provider = (await getProvider()).provider;
-				const campaign = new ethers.Contract(
-					address,
-					Campaign.abi,
-					provider
-				);
 
-				const [requestCount, contributorsCount] = await Promise.all([
-					campaign.getRequestsCount(),
-					campaign.getContributorsCount(),
-				]);
+    const fetchRequestsData = useCallback(async () => {
+        try {
+            const provider = (await getProvider()).provider;
+            const campaign = new ethers.Contract(
+                address,
+                Campaign.abi,
+                provider
+            );
 
-				const requestPromises = Array(Number(requestCount))
-					.fill(null)
-					.map(async (_, index) => {
-						const request = await campaign.requests(index);
-						return {
-							description: request.description,
-							value: ethers.formatEther(request.value),
-							recipient: request.recipient,
-							complete: request.complete,
-							approvalCount: request.approvalCount.toString(),
-							rejectionCount: request.rejectionCount.toString(),
-						};
-					});
+            const [requestCount, contributorsCount] = await Promise.all([
+                campaign.getRequestsCount(),
+                campaign.getContributorsCount(),
+            ]);
 
-				const requests = await Promise.all(requestPromises);
+            const requestPromises = Array(Number(requestCount))
+                .fill(null)
+                .map(async (_, index) => {
+                    const request = await campaign.requests(index);
+                    let userVoted = false;
 
-				setRequestsData({
-					requests,
-					contributorsCount: contributorsCount.toString(),
-					requestCount: requestCount.toString(),
-				});
-			} catch (error) {
-				console.error("Error fetching requests data:", error);
-			} finally {
-				setLoading(false);
-			}
-		}
+                    if (isConnected && userAddress) {
+                        userVoted = await campaign.hasVoted(index, userAddress);
+                    }
 
-		fetchRequestsData();
+                    return {
+                        description: request.description,
+                        value: ethers.formatEther(request.value),
+                        recipient: request.recipient,
+                        complete: request.complete,
+                        approvalCount: request.approvalCount.toString(),
+                        rejectionCount: request.rejectionCount.toString(),
+                        userVoted
+                    };
+                });
 
-		if (isConnected) {
-			const fetchUserData = async () => {
-				const provider = (await getProvider()).provider;
-				const campaign = new ethers.Contract(
-					address,
-					Campaign.abi,
-					provider
-				);
+            const requests = await Promise.all(requestPromises);
 
-				const [contribution, owner] = await Promise.all([
-					campaign.contributions(userAddress),
-					campaign.owner(),
-				]);
+            setRequestsData({
+                requests,
+                contributorsCount: contributorsCount.toString(),
+                requestCount: requestCount.toString(),
+            });
+        } catch (error) {
+            console.error("Error fetching requests data:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [address, getProvider, isConnected, userAddress]);
 
-				setUserContribution(ethers.formatEther(contribution));
-				setIsOwner(owner.toLowerCase() === userAddress?.toLowerCase());
-			};
+    const fetchUserData = useCallback(async () => {
+        if (!isConnected || !userAddress) return;
+        
+        const provider = (await getProvider()).provider;
+        const campaign = new ethers.Contract(
+            address,
+            Campaign.abi,
+            provider
+        );
 
-			fetchUserData();
-		}
+        const [contribution, owner] = await Promise.all([
+            campaign.contributions(userAddress),
+            campaign.owner(),
+        ]);
 
-		console.log("Fetching data...");
-	}, [address, getProvider, userAddress, isConnected]);
+        setUserContribution(ethers.formatEther(contribution));
+        setIsOwner(owner.toLowerCase() === userAddress?.toLowerCase());
+    }, [address, getProvider, isConnected, userAddress]);
+
+    useEffect(() => {
+        fetchRequestsData();
+        if (isConnected) {
+            fetchUserData();
+        }
+    }, [fetchRequestsData, fetchUserData, isConnected]);
 
 	if (loading) {
 		return (
@@ -133,13 +141,17 @@ export default function RequestsPage({ params }: RequestsPageProps) {
 		if (isOwner) {
 			return (
 				<div className="flex justify-between items-center mb-6">
-					<h3 className="text-2xl font-bold">Pending Requests</h3>
+					<h3 className="text-2xl font-bold">Requests</h3>
 					<Link href={`/campaigns/${address}/requests/new`}>
 						<Button>Add Request</Button>
 					</Link>
 				</div>
 			);
-		}
+		} else {
+            return (
+                <h3 className="text-2xl font-bold mb-6">Requests</h3>
+            );
+        }
 	};
 
 	return (
@@ -167,6 +179,8 @@ export default function RequestsPage({ params }: RequestsPageProps) {
 							contributorsCount={requestsData.contributorsCount}
 							isOwner={isOwner}
 							contribution={userContribution}
+                            userVoted={request.userVoted || false} // Pass the voting status
+                            onTransactionComplete={fetchRequestsData}
 						/>
 					))}
 				</TableBody>

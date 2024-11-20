@@ -14,7 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Campaign from "@/../artifacts/contracts/Campaign.sol/Campaign.json";
-import useProvider from "@/utils/getProvider";
 import { useNotification } from "@/utils/toastNotification";
 import { useAccount } from "wagmi";
 
@@ -28,27 +27,46 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 	const { address } = params;
 	const router = useRouter();
 	const notify = useNotification();
-	const { getProvider } = useProvider();
 	const [formState, setFormState] = useState({
 		description: "",
 		amount: "",
 		recipient: "",
 	});
 	const [isLoading, setIsLoading] = useState(false);
-    const {isConnected} = useAccount();
+	const { isConnected } = useAccount();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setIsLoading(true);
 
 		try {
-            if (!isConnected) {
-                notify("Error", "Please connect your wallet", "destructive");
-                return;
-            }
+			if (!window.ethereum) {
+				notify(
+					"Error",
+					"Please install MetaMask to use this application",
+					"destructive"
+				);
+				return;
+			}
 
-			const { signer } = await getProvider();
-			const campaign = new ethers.Contract(address, Campaign.abi, signer);
+			if (!isConnected) {
+				notify("Error", "Please connect your wallet", "destructive");
+				return;
+			}
+
+			if (
+				!formState.description ||
+				!formState.amount ||
+				!formState.recipient
+			) {
+				notify("Error", "All fields are required", "destructive");
+				return;
+			}
+
+			if (isNaN(Number(formState.amount))) {
+				notify("Error", "Please enter a valid number", "destructive");
+				return;
+			}
 
 			try {
 				ethers.getAddress(formState.recipient);
@@ -56,11 +74,15 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 				throw new Error("Invalid recipient address");
 			}
 
-			const tx = (await campaign.createRequest(
+            const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
+			const campaign = new ethers.Contract(address, Campaign.abi, signer);
+
+			const tx = await campaign.createRequest(
 				formState.description,
-				formState.amount,
+				ethers.parseEther(formState.amount),
 				formState.recipient
-			)) as ethers.TransactionResponse;
+			);
 
 			await tx.wait();
 
@@ -71,6 +93,7 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 			);
 
 			router.push(`/campaigns/${address}/requests`);
+            
 		} catch (error) {
 			console.error(error);
 			let errorMessage = "An unknown error occurred";
@@ -78,7 +101,7 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 			if (error instanceof Error) {
 				if (error.message.includes("Insufficient funds")) {
 					errorMessage =
-						"Insufficient funds in Campaign contract to create request";
+						"Insufficient funds in Campaign to create request";
 				} else if (error.message.includes("user rejected")) {
 					errorMessage = "Transaction was rejected by user";
 				} else if (
@@ -105,7 +128,7 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 	};
 
 	return (
-		<div className="container mx-auto p-6">
+		<div className="container mx-auto max-w-2xl p-4">
 			<Card>
 				<CardHeader>
 					<CardTitle>Create New Request</CardTitle>
@@ -128,17 +151,23 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 						</div>
 
 						<div className="space-y-2">
-							<Label htmlFor="amount">Amount (wei)</Label>
-							<Input
-								id="amount"
-								name="amount"
-								type="number"
-								step="any"
-								placeholder="Enter amount in ETH"
-								value={formState.amount}
-								onChange={handleInputChange}
-								required
-							/>
+							<Label htmlFor="amount">Amount</Label>
+							<div className="flex items-center">
+								<Input
+									id="amount"
+									name="amount"
+									type="number"
+									step="any"
+									placeholder="Enter amount"
+									value={formState.amount}
+									onChange={handleInputChange}
+									required
+									className="flex-grow mr-2"
+								/>
+								<span className="text-sm bg-secondary px-2 py-[9px] rounded-md">
+									MATIC
+								</span>
+							</div>
 						</div>
 
 						<div className="space-y-2">

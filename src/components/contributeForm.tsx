@@ -1,33 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import Campaign from "@/../artifacts/contracts/Campaign.sol/Campaign.json";
-import useProvider from "@/utils/getProvider";
 import { useNotification } from "@/utils/toastNotification";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
 
 interface ContributeFormProps {
 	minContribution: string;
 	campaignAddress: string;
+    onContributionSuccess?: () => void;
 }
 
 export default function ContributeForm({
 	minContribution,
 	campaignAddress,
+    onContributionSuccess,
 }: ContributeFormProps) {
-	const router = useRouter();
 	const [contribution, setContribution] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
-	const { getProvider } = useProvider();
+	const [walletBalance, setWalletBalance] = useState<string>("0");
 	const notify = useNotification();
-    const { isConnected } = useAccount();
+	const { address, isConnected } = useAccount();
+
+	// Fetch wallet balance
+	const { data: balanceData } = useBalance({
+		address: address,
+	});
+
+	// Update wallet balance when data changes
+	useEffect(() => {
+		if (balanceData) {
+			// Convert balance to string with 4 decimal places
+			const formattedBalance = parseFloat(
+				ethers.formatEther(balanceData.value)
+			).toFixed(3);
+			setWalletBalance(formattedBalance);
+		}
+	}, [balanceData]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -44,25 +59,48 @@ export default function ContributeForm({
 				return;
 			}
 
-            if (!isConnected) {
-                notify("Error", "Please connect your wallet", "destructive");
-                return;
-            }
+			if (!isConnected) {
+				notify("Error", "Please connect your wallet", "destructive");
+				return;
+			}
 
 			if (!campaignAddress) {
 				notify("Error", "Campaign address not found", "destructive");
 				return;
 			}
 
-			if (parseFloat(contribution) < ethers.parseUnits(minContribution)) {
+			if (!contribution) {
+				notify(
+					"Error",
+					"Please enter a contribution amount",
+					"destructive"
+				);
+				return;
+			}
+
+			if (isNaN(Number(contribution))) {
+				notify("Error", "Please enter a valid number", "destructive");
+				return;
+			}
+
+			const contributionInWei = ethers.parseEther(contribution);
+			const minContributionInWei = ethers.parseEther(minContribution);
+
+			if (contributionInWei < minContributionInWei) {
 				throw new Error(
-					`Minimum contribution is ${ethers.parseEther(
-						minContribution
-					)} wei`
+					`Minimum contribution is ${minContribution} MATIC`
 				);
 			}
 
-			const signer = (await getProvider()).signer;
+			// Check wallet balance
+			if (balanceData && contributionInWei > balanceData.value) {
+				throw new Error(
+					`Insufficient funds. Your balance is ${walletBalance} MATIC`
+				);
+			}
+
+			const browserProvider = new ethers.BrowserProvider(window.ethereum);
+			const signer = await browserProvider.getSigner();
 
 			const campaign = new ethers.Contract(
 				campaignAddress,
@@ -72,18 +110,21 @@ export default function ContributeForm({
 
 			try {
 				const tx = await campaign.contribute({
-					value: contribution,
+					value: contributionInWei,
 				});
 
 				await tx.wait();
+
+                notify("Success", `Contribution successful\nTxnHash: ${tx.hash}`, "default");
+
 			} catch (err) {
 				throw new Error("Failed to contribute");
 			}
 
-			notify("Success", "Contribution successful", "default");
+            if (onContributionSuccess) {
+                onContributionSuccess();
+            }
 
-			// Refresh the page to show updated stats
-			router.refresh();
 			setContribution("");
 		} catch (err) {
 			setError(
@@ -102,14 +143,13 @@ export default function ContributeForm({
 					<Input
 						id="contribution"
 						type="number"
-						placeholder={`Min: ${ethers.parseEther(
-							minContribution
-						)}`}
+						placeholder={`Min: ${minContribution}`}
+						step={0.001}
 						value={contribution}
 						onChange={(e) => setContribution(e.target.value)}
 					/>
 					<div className="flex items-center bg-secondary px-3 rounded-md">
-						<span className="text-sm">wei</span>
+						<span className="text-sm">MATIC</span>
 					</div>
 				</div>
 			</div>

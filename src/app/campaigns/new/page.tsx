@@ -11,7 +11,7 @@ import { useAccount } from "wagmi";
 import { ethers, TransactionReceipt } from "ethers";
 import CampaignFactory from "../../../../artifacts/contracts/CampaignFactory.sol/CampaignFactory.json";
 import { useNotification } from "@/utils/toastNotification";
-import useProvider from "@/utils/getProvider";
+// import useProvider from "@/utils/getProvider";
 
 interface CampaignNewState {
 	title: string;
@@ -28,12 +28,22 @@ const CampaignNew = () => {
 		loading: false,
 	});
 	const { isConnected } = useAccount();
-    const { getProvider } = useProvider();
+    // const { getProvider } = useProvider();
 
 	// const isMounted = useIsMounted();
 
 	const onSubmit = async (event: FormEvent) => {
 		event.preventDefault();
+
+        // Check if MetaMask is installed
+        if (!window.ethereum) {
+            notify(
+                "Error",
+                "Please install MetaMask to use this application",
+                "destructive"
+            );
+            return;
+        }
 
 		// Check if the user is connected
 		if (!isConnected) {
@@ -66,15 +76,21 @@ const CampaignNew = () => {
 		setState((prev) => ({ ...prev, loading: true }));
 
 		try {
-            const signer = (await getProvider()).signer;
+            const browserProvider = new ethers.BrowserProvider(
+                window.ethereum
+            );
+            const signer = await browserProvider.getSigner();            
             const factoryContract = new ethers.Contract(
                 process.env.NEXT_PUBLIC_FACTORY_ADDRESS as string,
                 CampaignFactory.abi,
                 signer
             );
+
+            const minContributionWei = ethers.parseEther(state.minContribution);
+
 			const txn = await factoryContract.createCampaign(
                 state.title,
-				state.minContribution
+				minContributionWei
 			);
 			const receipt = await txn.wait() as TransactionReceipt;
 
@@ -160,7 +176,7 @@ const CampaignNew = () => {
 									}
 								/>
 								<div className="flex items-center bg-secondary px-3 rounded-md">
-									<span className="text-sm">wei</span>
+									<span className="text-sm">MATIC</span>
 								</div>
 							</div>
 						</div>
