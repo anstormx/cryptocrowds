@@ -88,14 +88,14 @@ export default function ContributeForm({
 
 			if (contributionInWei < minContributionInWei) {
 				throw new Error(
-					`Minimum contribution is ${minContribution} MATIC`
+					`Minimum contribution is ${minContribution} POL`
 				);
 			}
 
 			// Check wallet balance
 			if (balanceData && contributionInWei > balanceData.value) {
 				throw new Error(
-					`Insufficient funds. Your balance is ${walletBalance} MATIC`
+					`Insufficient funds. Your balance is ${walletBalance} POL`
 				);
 			}
 
@@ -149,7 +149,7 @@ export default function ContributeForm({
 						onChange={(e) => setContribution(e.target.value)}
 					/>
 					<div className="flex items-center bg-secondary px-3 rounded-md">
-						<span className="text-sm">MATIC</span>
+						<span className="text-sm">POL</span>
 					</div>
 				</div>
 			</div>

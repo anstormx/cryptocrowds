@@ -165,7 +165,7 @@ export default function RequestNewPage({ params }: RequestNewPageProps) {
 									className="flex-grow mr-2"
 								/>
 								<span className="text-sm bg-secondary px-2 py-[9px] rounded-md">
-									MATIC
+									POL
 								</span>
 							</div>
 						</div>

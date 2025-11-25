@@ -175,7 +175,7 @@ const CampaignNew = () => {
 										}
 									/>
 									<div className="flex items-center bg-secondary px-3 rounded-md">
-										<span className="text-sm">MATIC</span>
+										<span className="text-sm">POL</span>
 									</div>
 								</div>
 							</div>

@@ -81,7 +81,7 @@ export default function CampaignDetails() {
 		},
 		{
 			title: "Minimum Contribution",
-			value: `${summary.minContribution} MATIC`,
+			value: `${summary.minContribution} POL`,
 			description:
 				"You must contribute at least this much to become an voter",
 		},
@@ -97,7 +97,7 @@ export default function CampaignDetails() {
 		},
 		{
 			title: "Campaign Balance",
-			value: `${summary.balance} MATIC`,
+			value: `${summary.balance} POL`,
 			description: "The amount of ETH this campaign has left to spend",
 		},
 	];
